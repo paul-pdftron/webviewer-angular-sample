@@ -35,7 +35,48 @@ export class AppComponent implements OnInit, AfterViewInit {
       });
 
       instance.docViewer.on('documentLoaded', this.wvDocumentLoadedHandler)
-    })
+
+      // download annotations from server when document has finished loading
+      // https://www.pdftron.com/documentation/web/guides/annotation/import-export/files/
+      instance.docViewer.on('annotationsLoaded', () => {
+        fetch('path/to/annotation/server', {
+          method: 'GET'
+        }).then(response => {
+          if (response.status === 200) {
+            response.text().then(xfdfString => {
+              // <xfdf>
+              //    <annots>
+              //      <text subject="Comment" page="0" color="#FFE6A2" ... />
+              //    </annots>
+              // </xfdf>
+              instance.annotManager.importAnnotations(xfdfString);
+            });
+          }
+        });
+      })
+
+      // upload annotations to server after annotation is changed (added/modify/delete)
+      // https://www.pdftron.com/documentation/web/guides/annotation-events#annotationchanged
+      instance.annotManager.on('annotationChanged', function(annotations, action, { imported }) {
+        if (imported) {
+          return;
+        }
+        const annotOptions = {
+          widgets: false,
+          fields: false,
+          links: false
+        }
+        instance.annotManager.exportAnnotations(annotOptions).then(xfdfString => {
+          const formData = new FormData();
+          formData.append('xfdf', new Blob([xfdfString], {type: "text/plain;charset=utf-8"}), /* filename */);
+          fetch('path/to/annotation/server', {
+            method: 'POST',
+            body: formData // written into an XFDF record in server database
+          });
+        })
+      })
+
+    });
   }
 
   ngOnInit() {
